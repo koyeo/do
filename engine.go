@@ -1,7 +1,9 @@
 package do
 
 func NewEngine(name string) *Engine {
-	return &Engine{name: name}
+	engine := &Engine{name: name}
+	engine.initMySql()
+	return  engine
 }
 
 type Engine struct {
@@ -24,11 +26,11 @@ func (p *Engine) InitRequest(host string, headers ...*Header) {
 	}
 }
 
-func (p *Engine) InitMySql(conn, user, password string) {
+func (p *Engine) initMySql() {
 	p.MySql = NewMySql(p)
 }
 
-func (p *Engine) InitRedis(conn, user, password string) {
+func (p *Engine) initRedis() {
 	p.Redis = NewRedis(p)
 }
 
@@ -36,15 +38,8 @@ func (p *Engine) InitStorage(root string) {
 	p.Storage = NewStorage(p)
 }
 
-func (p *Engine) Sync(name string) *Process {
+func (p *Engine) Start(name string) *Process {
 	r := newProcess(p, name)
-	p.processes = append(p.processes, r)
-	return r
-}
-
-func (p *Engine) Async(name string) *Process {
-	r := newProcess(p, name)
-	r.async = true
 	p.processes = append(p.processes, r)
 	return r
 }

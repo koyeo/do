@@ -1,6 +1,7 @@
 package do
 
 import (
+	"github.com/ttacon/chalk"
 	"log"
 )
 
@@ -56,7 +57,8 @@ func (p *Process) abort(title, params, result string) *Process {
 		params: params,
 		result: result,
 	})
-	log.Println("Process abort: ", title, params, result)
+	log.Println(chalk.Red.Color(chalk.Bold.TextStyle(title)), chalk.Red.Color(result))
+	//debug.PrintStack()
 	return p
 }
 

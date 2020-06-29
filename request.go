@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/bitly/go-simplejson"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 )
@@ -49,8 +50,9 @@ func (p *Request) fork(process *Process) *Request {
 }
 
 func (p *Request) url(path string) string {
-	url := strings.TrimSuffix(p.host, "/") + path
-	url = strings.ReplaceAll(url, "\u200b", "")
+	host := strings.ReplaceAll(p.host, "\u200b", "")
+	path = strings.ReplaceAll(path, "\u200b", "")
+	url := strings.TrimSuffix(host, "/") + "/" + strings.TrimPrefix(path, "/")
 	return url
 }
 
@@ -70,24 +72,62 @@ func (p *Request) Post(path string, data, result interface{}) *Process {
 }
 
 func (p *Request) Get(path string, result interface{}) *Process {
+
+	url := p.url(path)
+
 	if p.process.isAbort {
-		return p.process.pass("")
+		return p.process.pass(fmt.Sprintf("【Request】GET %s", url))
 	}
 
+	err := p.send(GET, url, "", result)
+	if err != nil {
+		return p.process.abort(fmt.Sprintf("【Request】GET %s", url), "", err.Error())
+	}
 	return p.process
 }
 
 func (p *Request) Delete(path string, result interface{}) *Process {
+
+	url := p.url(path)
+
 	if p.process.isAbort {
-		return p.process.pass("")
+		return p.process.pass(fmt.Sprintf("【Request】POST %s", url))
 	}
 
+	err := p.send(DELETE, url, "", result)
+	if err != nil {
+		return p.process.abort(fmt.Sprintf("【Request】POST %s", url), "", err.Error())
+	}
 	return p.process
 }
 
 func (p *Request) Put(path string, data, result interface{}) *Process {
+
+	url := p.url(path)
+
 	if p.process.isAbort {
-		return p.process.pass("")
+		return p.process.pass(fmt.Sprintf("【Request】POST %s", url))
+	}
+
+	err := p.send(PUT, url, data, result)
+	if err != nil {
+		return p.process.abort(fmt.Sprintf("【Request】POST %s", url), "", err.Error())
+	}
+	return p.process
+}
+
+func (p *Request) Route(route Route, data, result interface{}) *Process {
+
+	url := p.url(route.Path())
+	method := strings.ToUpper(route.Method())
+
+	if p.process.isAbort {
+		return p.process.pass(fmt.Sprintf("【Request】%s %s", method, url))
+	}
+
+	err := p.send(method, url, data, result)
+	if err != nil {
+		return p.process.abort(fmt.Sprintf("【Request】%s %s", method, url), "", err.Error())
 	}
 
 	return p.process
@@ -97,7 +137,6 @@ func (p *Request) Header(name, value string) *Process {
 	if p.process.isAbort {
 		return p.process.pass("")
 	}
-
 	return p.process
 }
 
@@ -110,6 +149,7 @@ func (p *Request) send(method, url string, data, result interface{}) (err error)
 
 	payload, err := p.parseData(data)
 	if err != nil {
+		err = fmt.Errorf("parse data error: " + err.Error())
 		return
 	}
 
@@ -118,6 +158,7 @@ func (p *Request) send(method, url string, data, result interface{}) (err error)
 	req, err := http.NewRequest(method, url, payload)
 
 	if err != nil {
+		err = fmt.Errorf("new request error: " + err.Error())
 		return
 	}
 	if p.headers != nil {
@@ -128,27 +169,30 @@ func (p *Request) send(method, url string, data, result interface{}) (err error)
 
 	res, err := client.Do(req)
 	if err != nil {
+		err = fmt.Errorf("send request error: " + err.Error())
 		return
 	}
 	defer func() {
 		e := res.Body.Close()
-		if err == nil {
-			err = e
+		if err == nil && e != nil {
+			err = fmt.Errorf("close request error: " + e.Error())
 		}
 	}()
 
 	if p.statusParser == nil {
-		err = fmt.Errorf("【Request】status parser is nil")
+		err = fmt.Errorf("status parser is nil")
 		return
 	}
 
 	output, err := p.statusParser(res)
 	if err != nil {
+		err = fmt.Errorf("parse status error: " + err.Error())
 		return
 	}
 
 	err = p.parseResult(output, result)
 	if err != nil {
+		err = fmt.Errorf("parse result error: " + err.Error())
 		return
 	}
 
@@ -192,6 +236,23 @@ func (p *Request) parseResult(output []byte, result interface{}) (err error) {
 }
 
 func defaultRequestStatusParser(res *http.Response) (data []byte, err error) {
+
+	defer func() {
+		if err != nil {
+			var body []byte
+			body, err = ioutil.ReadAll(res.Body)
+			if err != nil {
+				return
+			}
+			content := string(body)
+			if content != "" {
+				err = fmt.Errorf(content)
+			} else {
+				err = fmt.Errorf("response body is empty")
+			}
+
+		}
+	}()
 
 	status, err := simplejson.NewFromReader(res.Body)
 	if err != nil {
