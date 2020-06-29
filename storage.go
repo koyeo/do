@@ -17,3 +17,4 @@ func (p *Storage) fork(process *Process) *Storage {
 	n.root = p.root
 	return n
 }
+

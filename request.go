@@ -61,12 +61,12 @@ func (p *Request) Post(path string, data, result interface{}) *Process {
 	url := p.url(path)
 
 	if p.process.isAbort {
-		return p.process.pass(fmt.Sprintf("【Request】POST %s", url))
+		return p.process.pass()
 	}
 
-	err := p.send(POST, url, data, result)
+	err := p.send(POST, &url, data, result)
 	if err != nil {
-		return p.process.abort(fmt.Sprintf("【Request】POST %s", url), "", err.Error())
+		return p.process.Abort(fmt.Sprintf("【Request】POST %s", url), err)
 	}
 	return p.process
 }
@@ -76,12 +76,12 @@ func (p *Request) Get(path string, result interface{}) *Process {
 	url := p.url(path)
 
 	if p.process.isAbort {
-		return p.process.pass(fmt.Sprintf("【Request】GET %s", url))
+		return p.process.pass()
 	}
 
-	err := p.send(GET, url, "", result)
+	err := p.send(GET, &url, "", result)
 	if err != nil {
-		return p.process.abort(fmt.Sprintf("【Request】GET %s", url), "", err.Error())
+		return p.process.Abort(fmt.Sprintf("【Request】GET %s", url), err)
 	}
 	return p.process
 }
@@ -91,12 +91,12 @@ func (p *Request) Delete(path string, result interface{}) *Process {
 	url := p.url(path)
 
 	if p.process.isAbort {
-		return p.process.pass(fmt.Sprintf("【Request】POST %s", url))
+		return p.process.pass()
 	}
 
-	err := p.send(DELETE, url, "", result)
+	err := p.send(DELETE, &url, "", result)
 	if err != nil {
-		return p.process.abort(fmt.Sprintf("【Request】POST %s", url), "", err.Error())
+		return p.process.Abort(fmt.Sprintf("【Request】POST %s", url), err)
 	}
 	return p.process
 }
@@ -106,12 +106,12 @@ func (p *Request) Put(path string, data, result interface{}) *Process {
 	url := p.url(path)
 
 	if p.process.isAbort {
-		return p.process.pass(fmt.Sprintf("【Request】POST %s", url))
+		return p.process.pass()
 	}
 
-	err := p.send(PUT, url, data, result)
+	err := p.send(PUT, &url, data, result)
 	if err != nil {
-		return p.process.abort(fmt.Sprintf("【Request】POST %s", url), "", err.Error())
+		return p.process.Abort(fmt.Sprintf("【Request】POST %s", url), err)
 	}
 	return p.process
 }
@@ -122,12 +122,12 @@ func (p *Request) Route(route Route, data, result interface{}) *Process {
 	method := strings.ToUpper(route.Method())
 
 	if p.process.isAbort {
-		return p.process.pass(fmt.Sprintf("【Request】%s %s", method, url))
+		return p.process.pass()
 	}
 
-	err := p.send(method, url, data, result)
+	err := p.send(method, &url, data, result)
 	if err != nil {
-		return p.process.abort(fmt.Sprintf("【Request】%s %s", method, url), "", err.Error())
+		return p.process.Abort(fmt.Sprintf("【Request】%s %s", method, url), err)
 	}
 
 	return p.process
@@ -135,27 +135,51 @@ func (p *Request) Route(route Route, data, result interface{}) *Process {
 
 func (p *Request) Header(name, value string) *Process {
 	if p.process.isAbort {
-		return p.process.pass("")
+		return p.process.pass()
 	}
+
+	p.initHeaders()
+	p.headers.Add(NewHeader(name, value))
+
 	return p.process
 }
 
-func (p *Request) Exec(sql string, result interface{}) *Process {
-
-	return p.process
+func (p *Request) PrintHeaders() {
+	if p.headers != nil {
+		for _, v := range p.headers.All() {
+			fmt.Printf("%s: %s\n", v.name, v.value)
+		}
+	} else {
+		fmt.Println("request headers is empty")
+	}
 }
 
-func (p *Request) send(method, url string, data, result interface{}) (err error) {
+func (p *Request) send(method string, url *string, data, result interface{}) (err error) {
 
-	payload, err := p.parseData(data)
-	if err != nil {
-		err = fmt.Errorf("parse data error: " + err.Error())
-		return
+	var payload io.Reader
+
+	if method == POST || method == PUT {
+		payload, err = p.parseData(data)
+		if err != nil {
+			err = fmt.Errorf("parse data error: " + err.Error())
+			return
+		}
 	}
 
 	client := &http.Client{
 	}
-	req, err := http.NewRequest(method, url, payload)
+	req, err := http.NewRequest(method, *url, payload)
+
+	if method == GET || method == DELETE {
+		err = setRequestParams(req, data)
+		if err != nil {
+			return
+		}
+	}
+
+	if req != nil {
+		*url = req.URL.String()
+	}
 
 	if err != nil {
 		err = fmt.Errorf("new request error: " + err.Error())
@@ -179,6 +203,11 @@ func (p *Request) send(method, url string, data, result interface{}) (err error)
 		}
 	}()
 
+	if res.StatusCode != http.StatusOK {
+		err = fmt.Errorf("http code is not 200")
+		return
+	}
+
 	if p.statusParser == nil {
 		err = fmt.Errorf("status parser is nil")
 		return
@@ -190,10 +219,12 @@ func (p *Request) send(method, url string, data, result interface{}) (err error)
 		return
 	}
 
-	err = p.parseResult(output, result)
-	if err != nil {
-		err = fmt.Errorf("parse result error: " + err.Error())
-		return
+	if result != nil {
+		err = p.parseResult(output, result)
+		if err != nil {
+			err = fmt.Errorf("parse result error: " + err.Error())
+			return
+		}
 	}
 
 	return
@@ -237,13 +268,13 @@ func (p *Request) parseResult(output []byte, result interface{}) (err error) {
 
 func defaultRequestStatusParser(res *http.Response) (data []byte, err error) {
 
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		err = fmt.Errorf("read body error: " + err.Error())
+		return
+	}
 	defer func() {
 		if err != nil {
-			var body []byte
-			body, err = ioutil.ReadAll(res.Body)
-			if err != nil {
-				return
-			}
 			content := string(body)
 			if content != "" {
 				err = fmt.Errorf(content)
@@ -254,7 +285,7 @@ func defaultRequestStatusParser(res *http.Response) (data []byte, err error) {
 		}
 	}()
 
-	status, err := simplejson.NewFromReader(res.Body)
+	status, err := simplejson.NewJson(body)
 	if err != nil {
 		return
 	}
@@ -273,6 +304,42 @@ func defaultRequestStatusParser(res *http.Response) (data []byte, err error) {
 	if err != nil {
 		return
 	}
+
+	return
+}
+
+func setRequestParams(req *http.Request, data interface{}) (err error) {
+
+	defer func() {
+		e := recover()
+		if err != nil {
+			err = fmt.Errorf("ser request params error: %+v", e)
+		}
+	}()
+
+	j, err := json.Marshal(data)
+	if err != nil {
+		err = fmt.Errorf("json marshal error: %+v", err)
+		return
+	}
+
+	_params, err := simplejson.NewJson(j)
+	if err != nil {
+		err = fmt.Errorf("new simple json error: %+v", err)
+		return
+	}
+
+	params, err := _params.Map()
+	if err != nil {
+		err = fmt.Errorf("get params map error: %+v", err)
+		return
+	}
+
+	q := req.URL.Query()
+	for k, v := range params {
+		q.Add(k, fmt.Sprintf("%+v", v))
+	}
+	req.URL.RawQuery = q.Encode()
 
 	return
 }

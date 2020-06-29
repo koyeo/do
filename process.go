@@ -49,7 +49,38 @@ func (p *Process) addResult(result *Result) {
 	p.results = append(p.results, result)
 }
 
-func (p *Process) abort(title, params, result string) *Process {
+func (p *Process) Abort(messages ...interface{}) *Process {
+
+	var title, params, result string
+
+	if len(messages) > 0 {
+		v := messages[0]
+		switch v.(type) {
+		case string:
+			title = v.(string)
+		case error:
+			result = v.(error).Error()
+		}
+	}
+
+	if len(messages) > 1 {
+		v := messages[1]
+		switch v.(type) {
+		case string:
+			params = v.(string)
+		case error:
+			result = v.(error).Error()
+		}
+	}
+
+	if len(messages) > 2 {
+		v := messages[2]
+		switch v.(type) {
+		case error:
+			result = v.(error).Error()
+		}
+	}
+
 	p.isAbort = true
 	p.addResult(&Result{
 		status: Failed,
@@ -74,11 +105,10 @@ func (p *Process) next(title, params, result string) *Process {
 	return p
 }
 
-func (p *Process) pass(title string) *Process {
+func (p *Process) pass() *Process {
 
 	p.addResult(&Result{
 		status: None,
-		title:  title,
 	})
 
 	return p

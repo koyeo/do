@@ -3,7 +3,9 @@ package do
 func NewEngine(name string) *Engine {
 	engine := &Engine{name: name}
 	engine.initMySql()
-	return  engine
+	engine.initCos()
+	engine.initRedis()
+	return engine
 }
 
 type Engine struct {
@@ -32,6 +34,10 @@ func (p *Engine) initMySql() {
 
 func (p *Engine) initRedis() {
 	p.Redis = NewRedis(p)
+}
+
+func (p *Engine) initCos() {
+	p.Cos = NewCos(p)
 }
 
 func (p *Engine) InitStorage(root string) {

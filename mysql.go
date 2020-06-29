@@ -17,14 +17,14 @@ type MySql struct {
 func (p *MySql) Select(database *MySqlDatabase, sql string, result interface{}) *Process {
 
 	if p.process.isAbort {
-		return p.process.pass(fmt.Sprintf("【Mysql】%s", database.name))
+		return p.process.pass()
 	}
 
 	t := fmt.Sprintf("%T", result)
 
 	if !strings.HasPrefix(t, "*") {
 		err := fmt.Errorf("result should be pointer, where is %s", t)
-		return p.process.abort(fmt.Sprintf("【Mysql】%s: ", database.name), "", err.Error())
+		return p.process.Abort(fmt.Sprintf("【Mysql】%s: ", database.name), err)
 	}
 
 	if t == "*int" || t == "*int32" || t == "*int64" {
@@ -41,7 +41,7 @@ func (p *MySql) count(database *MySqlDatabase, sql string, result interface{}) *
 	res, err := database.db.SQL(sql).Count()
 	if err != nil {
 		err = fmt.Errorf("exec count sql error: " + err.Error())
-		return p.process.abort(fmt.Sprintf("【Mysql】%s: ", database.name), "", err.Error())
+		return p.process.Abort(fmt.Sprintf("【Mysql】%s: ", database.name), err)
 	}
 
 	switch result.(type) {
@@ -61,7 +61,7 @@ func (p *MySql) find(database *MySqlDatabase, sql string, result interface{}) *P
 	err := database.db.SQL(sql).Find(result)
 	if err != nil {
 		err = fmt.Errorf("exec find sql error: " + err.Error())
-		return p.process.abort(fmt.Sprintf("【Mysql】%s", database.name), "", err.Error())
+		return p.process.Abort(fmt.Sprintf("【Mysql】%s", database.name), err)
 	}
 
 	return p.process
@@ -72,7 +72,7 @@ func (p *MySql) get(database *MySqlDatabase, sql string, result interface{}) *Pr
 	_, err := database.db.SQL(sql).Get(result)
 	if err != nil {
 		err = fmt.Errorf("exec get sql error: " + err.Error())
-		return p.process.abort(fmt.Sprintf("【Mysql】%s", database.name), "", err.Error())
+		return p.process.Abort(fmt.Sprintf("【Mysql】%s", database.name), err)
 	}
 
 	return p.process
