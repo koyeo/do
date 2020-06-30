@@ -126,6 +126,7 @@ func (p *Request) Route(route Route, data, result interface{}) *Process {
 	}
 
 	err := p.send(method, &url, data, result)
+
 	if err != nil {
 		return p.process.Abort(fmt.Sprintf("【Request】%s %s", method, url), err)
 	}

@@ -5,10 +5,13 @@ func NewEngine(name string) *Engine {
 	engine.initMySql()
 	engine.initCos()
 	engine.initRedis()
+	engine.initAssert()
+	engine.initVod()
 	return engine
 }
 
 type Engine struct {
+	Assert    *Assert
 	Request   *Request
 	MySql     *MySql
 	Redis     *Redis
@@ -38,6 +41,14 @@ func (p *Engine) initRedis() {
 
 func (p *Engine) initCos() {
 	p.Cos = NewCos(p)
+}
+
+func (p *Engine) initVod() {
+	p.Vod = NewVod(p)
+}
+
+func (p *Engine) initAssert() {
+	p.Assert = NewAssert(p)
 }
 
 func (p *Engine) InitStorage(root string) {

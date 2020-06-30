@@ -27,11 +27,15 @@ func newProcess(engine *Engine, name string) *Process {
 	if engine.Cos != nil {
 		r.Cos = engine.Cos.fork(r)
 	}
+	if engine.Assert != nil {
+		r.Assert = engine.Assert.fork(r)
+	}
 
 	return r
 }
 
 type Process struct {
+	Assert   *Assert
 	Request  *Request
 	MySql    *MySql
 	Redis    *Redis

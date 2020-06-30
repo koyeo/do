@@ -18,6 +18,7 @@ type File struct {
 	MimeType string
 	Md5      string
 	Url      string
+	Uid      string
 }
 
 func ChooseFile(path string) (file *File, err error) {
